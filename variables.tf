@@ -1,12 +1,12 @@
 variable "access_key_id" {
-     default = ""
+    #  default = ""
 }
 variable "secret_key_id" {
-     default = ""
+    #  default = ""
 }
 
 variable "aws_region" {
-	default = "us-east-1"
+	# default = "us-east-1"
 }
 
 variable "vpc_cidr" {
@@ -30,15 +30,28 @@ variable "routeTable_cidr" {
 }
 
 variable "availabilityZone1" {
-     default = "us-east-1a"
+    #  default = "us-east-1a"
 }
 variable "availabilityZone2" {
-     default = "us-east-1b"
+    #  default = "us-east-1b"
 }
 variable "availabilityZone3" {
-     default = "us-east-1c"
+    #  default = "us-east-1c"
 }
 
-variable "vpc_id" {
+variable "amiId" {
+
+}
+
+variable "EC2_ROOT_VOLUME_SIZE" {
+	default = 20
+}
+
+variable "EC2_ROOT_VOLUME_TYPE" {
+	default = "gp2"
+}
+
+variable "EC2_ROOT_VOLUME_DELETE_ON_TERMINATION" {
+	default = true
 }
 
