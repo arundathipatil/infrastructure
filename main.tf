@@ -149,13 +149,13 @@ resource "aws_security_group" "database" {
   description = "Allow TLS inbound traffic"
   vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
 
-  ingress {
-    description = "TLS from VPC-mysql"
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # ingress {
+  #   description = "TLS from VPC-mysql"
+  #   from_port   = 3306
+  #   to_port     = 3306
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
   egress {
     from_port   = 0
     to_port     = 0
@@ -168,15 +168,15 @@ resource "aws_security_group" "database" {
   }
 }
 
-# resource "aws_security_group_rule" "databaseSecurityGroupRule" {
-#   type              = "ingress"
-#   from_port         = 3306
-#   to_port           = 3306
-#   protocol          = "tcp"
-#   security_group_id = "${aws_security_group.database.id}"
-#   cidr_blocks = ["0.0.0.0/0"]
-#   # source_security_group_id = "${aws_security_group.application.id}"
-# }
+resource "aws_security_group_rule" "databaseSecurityGroupRule" {
+  type              = "ingress"
+  from_port         = 3306
+  to_port           = 3306
+  protocol          = "tcp"
+  security_group_id = "${aws_security_group.database.id}"
+  # cidr_blocks = ["0.0.0.0/0"]
+  source_security_group_id = "${aws_security_group.application.id}"
+}
 
 resource "aws_kms_key" "mykey" {
   description             = "This key is used to encrypt bucket objects"
@@ -236,8 +236,8 @@ resource "aws_db_instance" "default" {
   instance_class       = "db.t3.micro"
   multi_az             = false 
   identifier           = "csye6225-su2020"
-  username             = "csye6225su2020"
-  password             = "foobarbaz"
+  username             = "${var.database_username}"
+  password             = "${var.database_password}"
   db_subnet_group_name = "${aws_db_subnet_group.dbSubnetGroup.name}"
   publicly_accessible  = false
   name                 = "csye6225"
@@ -250,11 +250,78 @@ resource "aws_key_pair" "csye6225_su20_a5" {
   public_key = file("~/.ssh/csye6225_su20_a4.pub")
 }
 
+#Create EC2-CSYE6225 role
+resource "aws_iam_role" "EC2-CSYE6225" {
+  name = "EC2-CSYE6225"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+
+  tags = {
+    tag-key = "tag-value"
+  }
+}
+
+#Creating EC2 instance profile
+resource "aws_iam_instance_profile" "EC2Profile" {
+  name = "EC2Profile"
+  role = "${aws_iam_role.EC2-CSYE6225.name}"
+}
+
+#Create WebAppS3 Policy
+resource "aws_iam_role_policy" "WebAppS3" {
+  name        = "WebAppS3"
+  role        = "${aws_iam_role.EC2-CSYE6225.id}"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement":  [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::webapp.arundathi.patil"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::webapp.arundathi.patil/*"
+            ]
+        }
+    ]
+}
+EOF
+}
+
+
 resource "aws_instance" "csye6225Webapp" {
   ami           = "${var.amiId}"
   instance_type = "t2.micro"
   disable_api_termination  = false
   subnet_id = "${aws_subnet.csye6225_a4_Subnet1.id}"
+  iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
 
    root_block_device {
     volume_size           = "${var.EC2_ROOT_VOLUME_SIZE}"
@@ -263,7 +330,31 @@ resource "aws_instance" "csye6225Webapp" {
   }
   vpc_security_group_ids = ["${aws_security_group.application.id}"]
   key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
+  user_data = <<EOF
+    #!/bin/bash
+    cd /opt/tomcat/bin
+touch setenv.sh
+echo "#!/bin/sh" > setenv.sh
+echo "JAVA_OPTS=\"\$JAVA_OPTS -Dspring.datasource.username=${var.database_username} -Dspring.datasource.password=${var.database_password}\"" >> setenv.sh
+EOF
   tags = {
     Name = "csye6225Webapp"
+  }
+}
+
+resource "aws_dynamodb_table" "csye6225" {
+  name           = "csye6225"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "csye6225"
   }
 }
