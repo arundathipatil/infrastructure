@@ -95,7 +95,7 @@ resource "aws_security_group" "application" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["${var.allow-all}"]
   }
 
   ingress {
@@ -103,7 +103,7 @@ resource "aws_security_group" "application" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["${var.allow-all}"]
   }
 
   ingress {
@@ -111,7 +111,7 @@ resource "aws_security_group" "application" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["${var.allow-all}"]
   }
 
   ingress {
@@ -119,7 +119,7 @@ resource "aws_security_group" "application" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["${var.allow-all}"]
   }
 
   egress {
@@ -134,6 +134,15 @@ resource "aws_security_group" "application" {
   }
 }
 
+# resource "aws_security_group_rule" "application_security_group_rule" {
+#   type              = "ingress"
+#   from_port         = 22
+#   to_port           = 22
+#   protocol          = "tcp"
+#   cidr_blocks       = ["0.0.0.0/0", "::/0"]
+#   security_group_id = "${aws_security_group.application.id}"
+# }
+
 
 resource "aws_security_group" "database" {
   name        = "database"
@@ -145,7 +154,7 @@ resource "aws_security_group" "database" {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
   egress {
     from_port   = 0
@@ -159,14 +168,15 @@ resource "aws_security_group" "database" {
   }
 }
 
-resource "aws_security_group_rule" "databaseSecurityGroupRule" {
-  type              = "ingress"
-  from_port         = 3306
-  to_port           = 3306
-  protocol          = "tcp"
-  security_group_id = "${aws_security_group.database.id}"
-  source_security_group_id = "${aws_security_group.application.id}"
-}
+# resource "aws_security_group_rule" "databaseSecurityGroupRule" {
+#   type              = "ingress"
+#   from_port         = 3306
+#   to_port           = 3306
+#   protocol          = "tcp"
+#   security_group_id = "${aws_security_group.database.id}"
+#   cidr_blocks = ["0.0.0.0/0"]
+#   # source_security_group_id = "${aws_security_group.application.id}"
+# }
 
 resource "aws_kms_key" "mykey" {
   description             = "This key is used to encrypt bucket objects"
@@ -235,6 +245,11 @@ resource "aws_db_instance" "default" {
   skip_final_snapshot     = true
 }
 
+resource "aws_key_pair" "csye6225_su20_a5" {
+  key_name   = "csye6225_su20_a5"
+  public_key = file("~/.ssh/csye6225_su20_a4.pub")
+}
+
 resource "aws_instance" "csye6225Webapp" {
   ami           = "${var.amiId}"
   instance_type = "t2.micro"
@@ -247,6 +262,7 @@ resource "aws_instance" "csye6225Webapp" {
     delete_on_termination = "${var.EC2_ROOT_VOLUME_DELETE_ON_TERMINATION}"
   }
   vpc_security_group_ids = ["${aws_security_group.application.id}"]
+  key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
   tags = {
     Name = "csye6225Webapp"
   }
