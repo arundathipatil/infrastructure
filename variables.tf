@@ -59,3 +59,10 @@ variable allow-all {
 	default = "0.0.0.0/0"
 }
 
+variable database_username {
+	default = "csye6225su2020"
+}
+
+variable database_password {
+	default = "foobarbaz"
+}
