@@ -55,3 +55,7 @@ variable "EC2_ROOT_VOLUME_DELETE_ON_TERMINATION" {
 	default = true
 }
 
+variable allow-all {
+	default = "0.0.0.0/0"
+}
+
