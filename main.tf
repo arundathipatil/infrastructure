@@ -315,6 +315,15 @@ resource "aws_iam_role_policy" "WebAppS3" {
 EOF
 }
 
+data "template_file" "init" {
+  template = "${file("./userdata.sh")}"
+  vars = {
+    rds_endpoint = "${aws_db_instance.default.address}"
+    ACCESS_KEY = "${var.access_key_id}"
+    SECRET_KEY = "${var.secret_key_id}"
+  }
+}
+
 
 resource "aws_instance" "csye6225Webapp" {
   ami           = "${var.amiId}"
@@ -330,13 +339,7 @@ resource "aws_instance" "csye6225Webapp" {
   }
   vpc_security_group_ids = ["${aws_security_group.application.id}"]
   key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
-  user_data = <<EOF
-    #!/bin/bash
-    cd /opt/tomcat/bin
-touch setenv.sh
-echo "#!/bin/sh" > setenv.sh
-echo "JAVA_OPTS=\"\$JAVA_OPTS -Dspring.datasource.username=${var.database_username} -Dspring.datasource.password=${var.database_password}\"" >> setenv.sh
-EOF
+  user_data = "${data.template_file.init.rendered}"
   tags = {
     Name = "csye6225Webapp"
   }
