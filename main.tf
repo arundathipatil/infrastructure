@@ -303,7 +303,7 @@ resource "aws_dynamodb_table" "csye6225" {
 // Create S3 bucket to save build artifacts- for EC2 Codedeploy to pick it
 resource "aws_s3_bucket" "codedeploy_arundathipatil_me" {
   bucket = "codedeploy.arundathipatil.me"
-  acl    = "private"
+  # acl    = "private"
   force_destroy = true
   tags = {
     Name        = "codedeploy.arundathipatil.me"
@@ -555,22 +555,38 @@ resource "aws_iam_policy" "circleci-Code-Deploy" {
 
    policy = <<EOF
 {
-  "Version": "2012-10-17",
-  "Statement":  [
+    "Version": "2012-10-17",
+    "Statement": [
         {
             "Sid": "VisualEditor0",
             "Effect": "Allow",
             "Action": [
-                "codedeploy:CreateDeployment",
-                "codedeploy:GetApplicationRevision",
-                "codedeploy:RegisterApplicationRevision",
-                "codedeploy:GetDeploymentConfig",
-                "codedeploy:GetDeployment"
+                "codedeploy:PutLifecycleEventHookExecutionStatus",
+                "codedeploy:DeleteGitHubAccountToken",
+                "codedeploy:BatchGetDeploymentTargets",
+                "codedeploy:DeleteResourcesByExternalId",
+                "codedeploy:GetDeploymentTarget",
+                "codedeploy:StopDeployment",
+                "codedeploy:ContinueDeployment",
+                "codedeploy:ListDeploymentTargets",
+                "codedeploy:ListApplications",
+                "codedeploy:CreateCloudFormationDeployment",
+                "codedeploy:ListOnPremisesInstances",
+                "codedeploy:ListGitHubAccountTokenNames",
+                "codedeploy:ListDeploymentConfigs",
+                "codedeploy:SkipWaitTimeForInstanceTermination"
             ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": "codedeploy:*",
             "Resource": [
                 "arn:aws:codedeploy:us-east-1:371394122941:deploymentconfig:CodeDeployDefault.AllAtOnce",
-                "arn:aws:codedeploy:us-east-1:371394122941:application:*",
-                "arn:aws:codedeploy:us-east-1:371394122941:deploymentgroup:/"
+                "arn:aws:codedeploy:us-east-1:371394122941:instance:csye6225Webapp-ec2",
+                "arn:aws:codedeploy:us-east-1:371394122941:deploymentgroup:csye6225-webapp/csye6225-webapp-deployment",
+                "arn:aws:codedeploy:us-east-1:371394122941:application:csye6225-webapp"
             ]
         }
     ]
