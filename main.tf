@@ -498,6 +498,114 @@ resource "aws_iam_role_policy_attachment" "CodeDeploy-EC2-S3_EC2ServiceRole_atta
   policy_arn = "${aws_iam_policy.CodeDeploy-EC2-S3.arn}"
   role = "${aws_iam_role.EC2ServiceRole.name}"
 }
+#------------------------------------------------------------------------------------------------------------------
+
+
+#CloudWatchAgent Policy
+
+resource "aws_iam_policy" "cloudwatch-EC2" {
+  name        = "cloudwatch-EC2"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudwatch:PutMetricData",
+                "ec2:DescribeVolumes",
+                "ec2:DescribeTags",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams",
+                "logs:DescribeLogGroups",
+                "logs:CreateLogStream",
+                "logs:CreateLogGroup"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
+        }
+    ]
+}
+EOF
+}
+
+#Attaching cloudwatch-EC2 policy to EC2ServiceRole role
+resource "aws_iam_role_policy_attachment" "cloudwatch-EC2_EC2ServiceRole_attach" {
+  policy_arn = "${aws_iam_policy.cloudwatch-EC2.arn}"
+  role = "${aws_iam_role.EC2ServiceRole.name}"
+}
+
+#-------------------------------------------------------------------------------------------------------------
+# AmazonSSMManagedInstanceCore  Policy
+
+resource "aws_iam_policy" "Systems-Manager-EC2" {
+  name        = "Systems-Manager-EC2"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:DescribeAssociation",
+                "ssm:GetDeployablePatchSnapshotForInstance",
+                "ssm:GetDocument",
+                "ssm:DescribeDocument",
+                "ssm:GetManifest",
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:ListAssociations",
+                "ssm:ListInstanceAssociations",
+                "ssm:PutInventory",
+                "ssm:PutComplianceItems",
+                "ssm:PutConfigurePackageResult",
+                "ssm:UpdateAssociationStatus",
+                "ssm:UpdateInstanceAssociationStatus",
+                "ssm:UpdateInstanceInformation"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssmmessages:CreateControlChannel",
+                "ssmmessages:CreateDataChannel",
+                "ssmmessages:OpenControlChannel",
+                "ssmmessages:OpenDataChannel"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2messages:AcknowledgeMessage",
+                "ec2messages:DeleteMessage",
+                "ec2messages:FailMessage",
+                "ec2messages:GetEndpoint",
+                "ec2messages:GetMessages",
+                "ec2messages:SendReply"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+
+#Attaching Systems-Manager-EC2 policy to EC2ServiceRole role
+resource "aws_iam_role_policy_attachment" "Systems-Manager-EC2_EC2ServiceRole_attach" {
+  policy_arn = "${aws_iam_policy.Systems-Manager-EC2.arn}"
+  role = "${aws_iam_role.EC2ServiceRole.name}"
+}
+
 
 #------------------------------------------------------------------------------------------------------------------
 
