@@ -262,26 +262,26 @@ data "template_file" "init" {
   }
 }
 
+// Creating EC2 instance
+# resource "aws_instance" "csye6225Webapp" {
+#   ami           = "${var.amiId}"
+#   instance_type = "t2.micro"
+#   disable_api_termination  = false
+#   subnet_id = "${aws_subnet.csye6225_a4_Subnet1.id}"
+#   iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
 
-resource "aws_instance" "csye6225Webapp" {
-  ami           = "${var.amiId}"
-  instance_type = "t2.micro"
-  disable_api_termination  = false
-  subnet_id = "${aws_subnet.csye6225_a4_Subnet1.id}"
-  iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
-
-   root_block_device {
-    volume_size           = "${var.EC2_ROOT_VOLUME_SIZE}"
-    volume_type           = "${var.EC2_ROOT_VOLUME_TYPE}"
-    delete_on_termination = "${var.EC2_ROOT_VOLUME_DELETE_ON_TERMINATION}"
-  }
-  vpc_security_group_ids = ["${aws_security_group.application.id}"]
-  key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
-  user_data = "${data.template_file.init.rendered}"
-  tags = {
-    Name = "csye6225Webapp-ec2"
-  }
-}
+#    root_block_device {
+#     volume_size           = "${var.EC2_ROOT_VOLUME_SIZE}"
+#     volume_type           = "${var.EC2_ROOT_VOLUME_TYPE}"
+#     delete_on_termination = "${var.EC2_ROOT_VOLUME_DELETE_ON_TERMINATION}"
+#   }
+#   vpc_security_group_ids = ["${aws_security_group.application.id}"]
+#   key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
+#   user_data = "${data.template_file.init.rendered}"
+#   tags = {
+#     Name = "csye6225Webapp-ec2"
+#   }
+# }
 
 resource "aws_dynamodb_table" "csye6225" {
   name           = "csye6225"
@@ -813,6 +813,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   app_name              = "${aws_codedeploy_app.csye6225-webapp.name}"
   deployment_group_name = "csye6225-webapp-deployment"
   service_role_arn      = "${aws_iam_role.CodeDeployServiceRole.arn}"
+  autoscaling_groups = ["${aws_autoscaling_group.asg.name}"]
 
    deployment_style {
     deployment_option = "WITHOUT_TRAFFIC_CONTROL"
@@ -830,5 +831,173 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   auto_rollback_configuration {
     enabled = true
     events  = ["DEPLOYMENT_FAILURE"]
+  }
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+// Creating launch configuration
+resource "aws_launch_configuration" "asg_launch_config" {
+  name = "asg_launch_config"
+  image_id      = "${var.amiId}"
+  instance_type = "t2.micro"
+  key_name = "${aws_key_pair.csye6225_su20_a5.key_name}"
+  associate_public_ip_address = true
+  user_data = "${data.template_file.init.rendered}"
+  iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
+  security_groups = ["${aws_security_group.application.id}"]
+   root_block_device {
+    volume_size           = "${var.EC2_ROOT_VOLUME_SIZE}"
+    volume_type           = "${var.EC2_ROOT_VOLUME_TYPE}"
+    delete_on_termination = "${var.EC2_ROOT_VOLUME_DELETE_ON_TERMINATION}"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+// Auto scaling group for EC2
+resource "aws_autoscaling_group" "asg" {
+  name                 = "asg"
+  launch_configuration = "${aws_launch_configuration.asg_launch_config.name}"
+  default_cooldown     = 60
+  min_size             = 2
+  max_size             = 5
+  desired_capacity     = 2
+  vpc_zone_identifier  = ["${aws_subnet.csye6225_a4_Subnet1.id}", "${aws_subnet.csye6225_a4_Subnet3.id}"]
+  target_group_arns    = ["${aws_lb_target_group.lb-target-group.arn}"]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+  tag {
+    key                 = "Name"
+    value               = "csye6225Webapp-ec2"
+    propagate_at_launch = true
+  }
+}
+
+# AUTOSCALING POLICIES for EC2 autoscaling group
+
+# Scale up policy 
+resource "aws_autoscaling_policy" "WebServerScaleUpPolicy" {
+  name                   = "WebServerScaleUpPolicy"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = "${aws_autoscaling_group.asg.name}"
+}
+
+# Scale down policy
+resource "aws_autoscaling_policy" "WebServerScaleDownPolicy" {
+  name                   = "WebServerScaleDownPolicy"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = "${aws_autoscaling_group.asg.name}"
+}
+
+# Scale up when average CPU usage is above 5%. Increment by 1.
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
+  alarm_name          = "CPUAlarmHigh"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "5"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.asg.name}"
+  }
+
+  alarm_description = "Scale-up if CPU > 5% for 2 minutes"
+  alarm_actions     = ["${aws_autoscaling_policy.WebServerScaleUpPolicy.arn}"]
+}
+
+# Scale down when average CPU usage is below 3%. Decrement by 1
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
+  alarm_name          = "CPUAlarmLow"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "3"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.asg.name}"
+  }
+
+  alarm_description = "Scale-down if CPU < 3% for 2 minutes"
+  alarm_actions     = ["${aws_autoscaling_policy.WebServerScaleDownPolicy.arn}"]
+}
+
+# Application Load Balancer For Your Web Application
+resource "aws_lb" "webapp-lb" {
+  name               = "webapp-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = ["${aws_security_group.application.id}"]
+  ip_address_type    = "ipv4"
+  enable_deletion_protection = false
+  subnets = ["${aws_subnet.csye6225_a4_Subnet1.id}", "${aws_subnet.csye6225_a4_Subnet2.id}"]
+  tags = {
+    Environment = "production"
+  }
+
+}
+
+resource "aws_lb_target_group" "lb-target-group" {
+  health_check {
+    interval            = 10
+    path                = "/"
+    protocol            = "HTTP"
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+  }
+  name        = "lb-target-group"
+  port        = 8080
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
+}
+
+# # EC2 instances launched in the auto-scaling group attached to load balancer.
+# resource "aws_autoscaling_attachment" "asg_attachment" {
+#   autoscaling_group_name = "${aws_autoscaling_group.asg.id}"
+#   elb                    = "${aws_lb.webapp_lb.id}"
+# }
+
+#  Application load balancer to accept HTTP traffic on port 80 and forward it to your application instances on whatever port it listens on.
+resource "aws_lb_listener" "webapp-lb-listener" {
+  load_balancer_arn = "${aws_lb.webapp-lb.arn}"
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = "${aws_lb_target_group.lb-target-group.arn}"
+  }
+}
+
+#Resources to import prod DNS hosted zone
+resource "aws_route53_zone" "prodZone" {
+  name = "prod.arundathipatil.me"
+}
+
+resource "aws_route53_record" "lbAlias" {
+  zone_id = "${aws_route53_zone.prodZone.zone_id}"
+  name    = "lb.prod.arundathipatil.me"
+  type    = "A"
+
+  alias {
+    name                   = "${aws_lb.webapp-lb.dns_name}"
+    zone_id                = "${aws_lb.webapp-lb.zone_id}"
+    evaluate_target_health = false
   }
 }
