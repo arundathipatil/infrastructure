@@ -90,37 +90,37 @@ resource "aws_security_group" "application" {
   description = "Allow TLS inbound traffic"
   vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
 
-  ingress {
-    description = "TLS from VPC-Https"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["${var.allow-all}"]
-  }
+  # ingress {
+  #   description = "TLS from VPC-Https"
+  #   from_port   = 443
+  #   to_port     = 443
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["${var.allow-all}"]
+  # }
 
-  ingress {
-    description = "TLS from VPC-HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["${var.allow-all}"]
-  }
+  # ingress {
+  #   description = "TLS from VPC-HTTP"
+  #   from_port   = 80
+  #   to_port     = 80
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["${var.allow-all}"]
+  # }
 
-  ingress {
-    description = "TLS from VPC-Custom TCP"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["${var.allow-all}"]
-  }
+  # ingress {
+  #   description = "TLS from VPC-Custom TCP"
+  #   from_port   = 8080
+  #   to_port     = 8080
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["${var.allow-all}"]
+  # }
 
-  ingress {
-    description = "TLS from VPC-SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["${var.allow-all}"]
-  }
+  # ingress {
+  #   description = "TLS from VPC-SSH"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["${var.allow-all}"]
+  # }
 
   egress {
     from_port   = 0
@@ -941,7 +941,7 @@ resource "aws_lb" "webapp-lb" {
   name               = "webapp-lb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = ["${aws_security_group.application.id}"]
+  security_groups    = ["${aws_security_group.lbSecurityGroup.id}"]
   ip_address_type    = "ipv4"
   enable_deletion_protection = false
   subnets = ["${aws_subnet.csye6225_a4_Subnet1.id}", "${aws_subnet.csye6225_a4_Subnet2.id}"]
@@ -1000,4 +1000,47 @@ resource "aws_route53_record" "lbAlias" {
     zone_id                = "${aws_lb.webapp-lb.zone_id}"
     evaluate_target_health = false
   }
+}
+
+
+resource "aws_security_group" "lbSecurityGroup" {
+  name        = "lbSecurityGroup"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
+
+  ingress {
+    description = "TLS from VPC-Https"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["${var.allow-all}"]
+  }
+
+  ingress {
+    description = "TLS from VPC-HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["${var.allow-all}"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "application"
+  }
+}
+
+resource "aws_security_group_rule" "applicationSecurityGroupRule" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  security_group_id = "${aws_security_group.application.id}"
+  # cidr_blocks = ["0.0.0.0/0"]
+  source_security_group_id = "${aws_security_group.lbSecurityGroup.id}"
 }
