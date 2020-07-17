@@ -907,7 +907,7 @@ resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
   namespace           = "AWS/EC2"
   period              = "120"
   statistic           = "Average"
-  threshold           = "5"
+  threshold           = "90"
 
   dimensions = {
     AutoScalingGroupName = "${aws_autoscaling_group.asg.name}"
