@@ -5,3 +5,5 @@ echo "s3bucketname=webapp.arundathi.patil" >> /etc/environment
 echo "ACCESS_KEY=${ACCESS_KEY}" >> /etc/environment
 echo "SECRET_KEY=${SECRET_KEY}" >> /etc/environment
 echo "rdsinstance=${rds_endpoint}" >> /etc/environment
+echo "QUEUE=password-reset-queue" >> /etc/environment
+echo "domainName=prod.arundathipatil.me" >> /etc/environment

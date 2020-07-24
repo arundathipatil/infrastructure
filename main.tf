@@ -295,6 +295,11 @@ resource "aws_dynamodb_table" "csye6225" {
     type = "S"
   }
 
+  ttl {
+    attribute_name = "TimeToExist"
+    enabled        = true
+  }
+
   tags = {
     Name        = "csye6225-ec2"
   }
@@ -1044,3 +1049,250 @@ resource "aws_security_group_rule" "applicationSecurityGroupRule" {
   # cidr_blocks = ["0.0.0.0/0"]
   source_security_group_id = "${aws_security_group.lbSecurityGroup.id}"
 }
+
+//===========================================================================================================
+
+// Create SNS topic
+resource "aws_sns_topic" "password_reset" {
+  name = "password-reset"
+}
+
+
+// Creating SQS
+resource "aws_sqs_queue" "password_reset_queue" {
+  name = "password-reset-queue"
+  # visibility_timeout_seconds = 300
+  # message_retention_seconds = 86400
+  tags = {
+    Name = "password-reset-queue"
+  }
+}
+
+# dead letter queue- for events that cannot be proceesed
+# resource "aws_sqs_queue" "password_reset_dl_queue" {
+#     name = "password-reset-dl-queue"
+# }
+
+resource "aws_sns_topic_subscription" "subscribe_to_sns_topic" {
+    topic_arn = "${aws_sns_topic.password_reset.arn}"
+    protocol  = "lambda"
+    endpoint  = "${aws_lambda_function.emailOnSNS.arn}"
+}
+
+
+# SQS policy that is needed for our SQS to actually receive events from the SNS topic
+resource "aws_sqs_queue_policy" "password_reset_queue_policy" {
+    queue_url = "${aws_sqs_queue.password_reset_queue.id}"
+
+    policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Id": "sqspolicy",
+  "Statement": [
+    {
+      "Sid": "First",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "sqs:SendMessage",
+      "Resource": "${aws_sqs_queue.password_reset_queue.arn}",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": "${aws_sns_topic.password_reset.arn}"
+        }
+      }
+    }
+  ]
+}
+POLICY
+}
+
+# compress the file(s) so that Terraform can then deploy them correctly
+# data "archive_file" "lambda_zip" {
+#   type        = "zip"
+#   source_file =  file("~/deaProjects/git-projects/A9/infrastructure/com/serverless/faas/events")
+#   # "${path.module}/lambda/example.js"
+#   output_path = 
+#   # "${path.module}/lambda/example.zip"
+# }
+
+
+
+
+// Create IAM role for  lambda function
+resource "aws_iam_role" "iamRoleForlambda" {
+  name = "iamRoleForlambda"
+  assume_role_policy = data.aws_iam_policy_document.lambda-assume-role-policy.json
+#   assume_role_policy = <<EOF
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Action": "sts:AssumeRole",
+#       "Principal": {
+#         "Service": "lambda.amazonaws.com"
+#       },
+#       "Effect": "Allow",
+#       "Sid": ""
+#     }
+#   ]
+# }
+# EOF
+}
+
+#assume_role_policy JSON data for Lambda Functions 
+data "aws_iam_policy_document" "lambda-assume-role-policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+# Create Lambda function
+resource "aws_lambda_function" "emailOnSNS" {
+  role          = "${aws_iam_role.iamRoleForlambda.arn}"
+  filename         = "${var.lambda_payload_filename}"
+  function_name    = "emailOnSNS"
+  runtime          = "${var.lambda_runtime}"
+  handler          = "${var.lambda_function_handler}"
+  memory_size      = 2400
+  timeout          = 120
+  environment {
+    variables = {
+      SendersEmail = var.SendersEmail
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "SNSAccessToEC2Role" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+  role = "${aws_iam_role.EC2ServiceRole.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "SQSAccessToEC2Role" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
+  role = "${aws_iam_role.EC2ServiceRole.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "DynamoDbAccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "S3AccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "SESAccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "SNSAccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "SQSAccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_role_policy_attachment" "BasicExecutionAccessToLambdaFunctionRole" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role = "${aws_iam_role.iamRoleForlambda.name}"
+}
+
+resource "aws_iam_policy" "circleci-lambda-update-policy" {
+  name        = "circleci-lambda-update-policy"
+  description = "Allows cicd user to access lambda function"
+
+   policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:DescribeChangeSet",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:DescribeStacks",
+                "cloudformation:GetTemplate",
+                "cloudformation:ListStackResources",
+                "cloudwatch:*",
+                "cognito-identity:ListIdentityPools",
+                "cognito-sync:GetCognitoEvents",
+                "cognito-sync:SetCognitoEvents",
+                "dynamodb:*",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeVpcs",
+                "events:*",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:GetRole",
+                "iam:GetRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies",
+                "iam:ListRoles",
+                "iam:PassRole",
+                "iot:AttachPrincipalPolicy",
+                "iot:AttachThingPrincipal",
+                "iot:CreateKeysAndCertificate",
+                "iot:CreatePolicy",
+                "iot:CreateThing",
+                "iot:CreateTopicRule",
+                "iot:DescribeEndpoint",
+                "iot:GetTopicRule",
+                "iot:ListPolicies",
+                "iot:ListThings",
+                "iot:ListTopicRules",
+                "iot:ReplaceTopicRule",
+                "kinesis:DescribeStream",
+                "kinesis:ListStreams",
+                "kinesis:PutRecord",
+                "kms:ListAliases",
+                "lambda:*",
+                "logs:*",
+                "s3:*",
+                "sns:ListSubscriptions",
+                "sns:ListSubscriptionsByTopic",
+                "sns:ListTopics",
+                "sns:Publish",
+                "sns:Subscribe",
+                "sns:Unsubscribe",
+                "sqs:ListQueues",
+                "sqs:SendMessage",
+                "tag:GetResources",
+                "xray:PutTelemetryRecords",
+                "xray:PutTraceSegments"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+// Attaching circleci-lamba-update-policy to cicd user
+resource "aws_iam_user_policy_attachment" "circleci-attach-lambda-update-Policy" {
+  user       = "${aws_iam_user.cicd.name}"
+  policy_arn = "${aws_iam_policy.circleci-lambda-update-policy.arn}"
+}
+
+
+resource "aws_lambda_permission" "allow_sns" {
+  # statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:*"
+  function_name = "${aws_lambda_function.emailOnSNS.function_name}"
+  principal     = "sns.amazonaws.com"
+  source_arn    = "arn:aws:sns:us-east-1:371394122941:password-reset"
+}
+
+# resource "aws_lambda_event_source_mapping" "sqstriggerToLambda" {
+#   event_source_arn = "${aws_sqs_queue.password_reset_queue.arn}"
+#   function_name    = "${aws_lambda_function.emailOnSNS.arn}"
+# }

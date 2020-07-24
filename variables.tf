@@ -66,3 +66,19 @@ variable database_username {
 variable database_password {
 	default = "foobarbaz"
 }
+
+variable "lambda_payload_filename" {
+  default = "~/faas/faas-0.0.1-SNAPSHOT.jar"
+}
+
+variable "lambda_runtime" {
+  default = "java8"
+}
+
+variable "lambda_function_handler" {
+  default = "com.serverless.faas.events.EmailEvent::handleRequest"
+}
+
+variable "SendersEmail" {
+  default = "donotreply@prod.arundathipatil.me"
+}
