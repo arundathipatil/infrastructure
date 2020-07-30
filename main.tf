@@ -232,7 +232,9 @@ resource "aws_db_instance" "default" {
   allocated_storage    = 20
   storage_type         = "gp2"
   engine_version       = "5.7"
-  parameter_group_name = "default.mysql5.7"
+  # parameter_group_name = "default.mysql5.7"
+  storage_encrypted    = true
+  parameter_group_name = "${aws_db_parameter_group.param-group-for-rds.name}"
   engine               = "mysql"
   instance_class       = "db.t3.micro"
   multi_az             = false 
@@ -244,6 +246,17 @@ resource "aws_db_instance" "default" {
   name                 = "csye6225"
   vpc_security_group_ids = ["${aws_security_group.database.id}"]
   skip_final_snapshot     = true
+}
+
+resource "aws_db_parameter_group" "param-group-for-rds" {
+  name   = "param-group-for-rds"
+  family = "MySQL5.7"
+
+  parameter {
+    name  = "performance_schema"
+    value = "1"
+    apply_method = "pending-reboot"
+  }
 }
 
 resource "aws_key_pair" "csye6225_su20_a5" {
@@ -981,8 +994,9 @@ resource "aws_lb_target_group" "lb-target-group" {
 #  Application load balancer to accept HTTP traffic on port 80 and forward it to your application instances on whatever port it listens on.
 resource "aws_lb_listener" "webapp-lb-listener" {
   load_balancer_arn = "${aws_lb.webapp-lb.arn}"
-  port              = "80"
-  protocol          = "HTTP"
+  port              = "443"
+  protocol          = "HTTPS"
+  certificate_arn   = "arn:aws:acm:us-east-1:371394122941:certificate/be44f6b1-6fb3-491e-8717-35663500d5bb"
 
   default_action {
     type             = "forward"
@@ -997,7 +1011,7 @@ resource "aws_route53_zone" "prodZone" {
 
 resource "aws_route53_record" "lbAlias" {
   zone_id = "${aws_route53_zone.prodZone.zone_id}"
-  name    = "lb.prod.arundathipatil.me"
+  name    = "prod.arundathipatil.me"
   type    = "A"
 
   alias {
